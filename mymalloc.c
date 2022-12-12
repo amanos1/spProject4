@@ -76,6 +76,21 @@ char *findFirst(size_t size) {
 }
 
 char *findNext(size_t size) {
+	char *iterator = prev_blck;
+	while(iterator != NULL){
+		if(GET_SIZE(itertor) >= size){
+			prev_blck = iterator;
+			return iterator;
+		}
+		iterator = (char *) GET_NXT_PTR(iterator);
+		if(iterator == lastBlock){
+			iterator = heap;
+		}	
+		if(iterator == prev_blck){
+			//You have made a loop and not found a suitable location
+			prev_blck = iterator;
+			return NULL;
+		}
 	return NULL;
 }
 
@@ -190,8 +205,12 @@ void* myrealloc(void* ptr, size_t size) {
 	if(GET_ALLOC(nextBlock) == 0 
 		&& size <= GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr))) {
 		//take the block at nextBlock's previous pointer and make it point to nextBlocks next pointer
+		char *pointer = GET_PRV_PTR(nextBlock);
+		pointer->next = GET_NXT_PTR(nextBlock);
 		//increase the size of current block
+		
 		//create another free block after our newly exteded one if we can
+		
 		return ptr;
 	}
 
