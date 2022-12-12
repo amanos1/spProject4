@@ -1,5 +1,8 @@
 #include "mymalloc.h"
 
-int main(int argc, char *argv[]) {
+int main() {
 	//this is where we do something
+	myinit(0);
+	printBlocks();
+	mycleanup();
 }
