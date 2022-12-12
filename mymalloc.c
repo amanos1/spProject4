@@ -85,19 +85,20 @@ char *findFirst(size_t size) {
 char *findNext(size_t size) {
 	char *iterator = prev_blck;
 	while(iterator != NULL){
-		if(GET_SIZE(itertor) >= size){
+		if(GET_SIZE(iterator) >= size){
 			prev_blck = iterator;
 			return iterator;
 		}
 		iterator = (char *) GET_NXT_PTR(iterator);
-		if(iterator == lastBlock){
+		if(iterator == NULL || (void *) iterator > lastBlock){
 			iterator = heap;
-		}	
+		}
 		if(iterator == prev_blck){
 			//You have made a loop and not found a suitable location
 			prev_blck = iterator;
 			return NULL;
 		}
+	}
 	return NULL;
 }
 
@@ -181,21 +182,24 @@ void* mymalloc(size_t size) {
 int assimilate(char *addr) {
 	void *prev_blk = HDRP(PREV_BLKP(addr + WSIZE));
 	void *nxt_blk =  HDRP(NEXT_BLKP(addr + WSIZE));
+	int unique = 1;
 
 	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk) {
 		PUT(prev_blk, PACK(GET_SIZE(prev_blk) + GET_SIZE(addr), 0));
 		PUT2(NXT_PTR(prev_blk), (unsigned long) nxt_blk);
 		addr = prev_blk;
-		return 0;
+		if(lastBlock == addr) lastBlock = prev_blk;
+		unique = 0;
 	}
 
 	if(GET_NXT_PTR(addr) ==  (unsigned long) nxt_blk) {
 		PUT(addr, PACK(GET_SIZE(addr) + GET_SIZE(nxt_blk), 0));
 		PUT2(NXT_PTR(addr), (unsigned long) GET_NXT_PTR(nxt_blk));
-		return 0;
+		if(lastBlock == nxt_blk) lastBlock = addr;
+		unique = 0;
 	}
 
-	return 1;
+	return unique;
 }
 
 void myfree(void* ptr) {
@@ -242,19 +246,8 @@ void* myrealloc(void* ptr, size_t size) {
 	char *nextBlock = NEXT_BLKP(HDRP(ptr));
 
 	if(GET_ALLOC(nextBlock) == 0 
-<<<<<<< HEAD
 		&& newSize <= GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr))) {
 		place(HDRP(ptr), newSize);
-=======
-		&& size <= GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr))) {
-		//take the block at nextBlock's previous pointer and make it point to nextBlocks next pointer
-		char *pointer = GET_PRV_PTR(nextBlock);
-		pointer->next = GET_NXT_PTR(nextBlock);
-		//increase the size of current block
-		
-		//create another free block after our newly exteded one if we can
-		
->>>>>>> 220a9367bcad28c230fa77117f96e12b68418796
 		return ptr;
 	}
 
