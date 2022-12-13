@@ -72,7 +72,7 @@ void myinit(int allocAlg) {
 }
 
 char *findFirst(size_t size) {
-	char *currPtr = heap;
+	char *currPtr = GET_NXT_PTR(heap);
 	while(currPtr != NULL && currPtr <= (char *) lastBlock) {
 		if(GET_SIZE(currPtr) >= size) {
 			return currPtr;
@@ -142,7 +142,7 @@ void place(void *ptr, size_t size) {
 	PUT(ptr, PACK(size, 1));
 	PUT(FTRP(ptr + WSIZE), PACK(size, 1));
 	if(diff == 0) {
-		printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
+		//printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
 		if(prev != NULL) PUT2(NXT_PTR(prev), (unsigned long) GET_NXT_PTR(ptr));
 		if(next != NULL) PUT2(PRV_PTR(next), (unsigned long) GET_PRV_PTR(ptr));
 	} else {
@@ -172,7 +172,6 @@ void* mymalloc(size_t size) {
 	char *ptr;
 	if ((ptr = realEstate(newSize)) == NULL) return NULL;
 	place(ptr, newSize);
-	printf("%lu hhh\n", (unsigned long) ptr);
 	return (void *)(ptr + WSIZE);
 }
 
@@ -246,7 +245,7 @@ void* myrealloc(void* ptr, size_t size) {
 	else
 		newSize = DSIZE * ((size + 3*DSIZE + (DSIZE-1)) / DSIZE);
 
-	char *nextBlock = NEXT_BLKP(HDRP(ptr));
+	char *nextBlock = HDRP(NEXT_BLKP(ptr));
 
 	if(GET_ALLOC(nextBlock) == 0 
 		&& newSize <= GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr))) {
