@@ -48,6 +48,14 @@ static void *heapTruStart; //so that we can free it
 static void *heap; //Points to the first byte of heap
 static void *lastBlock; //Points to last byte of heap plus 1
 
+struct free_list_blocks{
+	void *address;
+	size_t size;
+	struct free_list_blocks *next;
+};
+
+typedef struct free_list_blocks free_list;
+
 /***********************************************************************/
 /*  */
 /***********************************************************************/
@@ -67,10 +75,15 @@ void myinit(int allocAlg) {
 	PUT2(NXT_PTR(bigFreeBlk), (unsigned long) NULL);
 	PUT2(PRV_PTR(bigFreeBlk), (unsigned long) heap);
 	PUT2(NXT_PTR(heap), (unsigned long) bigFreeBlk);
+	
+	free_list *block;
 
 	lastBlock = bigFreeBlk;
 	mode = allocAlg;
 }
+
+	
+
 
 /***********************************************************************/
 /* THE FOLLOWING FUNCTION DETERMINES IF THE BLOCK IN QUESTION IS       */
@@ -82,8 +95,10 @@ int assimilate(char *addr) {
 	void *prev_blk = HDRP(PREV_BLKP(addr + WSIZE));
 	void *nxt_blk =  HDRP(NEXT_BLKP(addr + WSIZE));
 	int unique = 1;
-
-	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk) {
+	
+	printf("%lu %lu %lu\n", GET_PRV_PTR(addr), GET_NXT_PTR(addr), lastBlock);
+	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk && GET_ALLOC(prev_blk) == 0) {
+		printf("hello");
 		PUT(prev_blk, PACK(GET_SIZE(prev_blk) + GET_SIZE(addr), 0));
 		PUT2(NXT_PTR(prev_blk), (unsigned long) nxt_blk);
 		addr = prev_blk;
@@ -91,7 +106,8 @@ int assimilate(char *addr) {
 		unique = 0;
 	}
 
-	if(GET_NXT_PTR(addr) ==  (unsigned long) nxt_blk) {
+	if(GET_NXT_PTR(addr) ==  (unsigned long) nxt_blk && GET_ALLOC(nxt_blk) == 0) {
+		printf("hello2");		
 		PUT(addr, PACK(GET_SIZE(addr) + GET_SIZE(nxt_blk), 0));
 		PUT2(NXT_PTR(addr), (unsigned long) GET_NXT_PTR(nxt_blk));
 		if(lastBlock == nxt_blk) lastBlock = addr;
@@ -226,6 +242,7 @@ void myfree(void* ptr) {
 
 	PUT(HDRP(ptr), PACK(size, 0));
 	PUT(FTRP(ptr), PACK(size, 0));
+	
 
 	if(assimilate(HDRP(ptr)) == 1) {
 		void *p = heap;
@@ -234,11 +251,14 @@ void myfree(void* ptr) {
 				PUT2(NXT_PTR(ptr), (unsigned long) GET_NXT_PTR(p));
 				PUT2(PRV_PTR(ptr), (unsigned long) p);
 				PUT2(NXT_PTR(p),   (unsigned long) ptr);
+				break;
 			}
 			p = (void *) GET_NXT_PTR(p);
 		}
 	}
 }
+
+
 
 void* myrealloc(void* ptr, size_t size) {
 	if(ptr <= heap || ptr >= lastBlock) return NULL;
