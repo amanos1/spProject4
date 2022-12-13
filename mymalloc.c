@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "mymalloc.h"
 
 #define HEAP_SIZE 1048575 //2 to the 20th power
 
@@ -23,7 +24,7 @@
 #define GET_SIZE(p)  (GET(p) & ~0x7)
 #define GET_ALLOC(p) (GET(p) & 0x1)
 
-// Given block ptr bp computef addr'0sS •of! ti'ts headel:-. and fOoter
+// Given block ptr bp computef address of its header and footer
 #define HDRP(bp) ((char *)(bp) - WSIZE)
 #define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
@@ -73,7 +74,7 @@ void myinit(int allocAlg) {
 
 char *findFirst(size_t size) {
 	char *currPtr = heap;
-	while(currPtr != NULL) {
+	while(currPtr != NULL && currPtr <= lastBlock) {
 		if(GET_SIZE(currPtr) >= size) {
 			return currPtr;
 		}
@@ -170,6 +171,7 @@ void* mymalloc(size_t size) {
 	char *ptr;
 	if ((ptr = realEstate(newSize)) == NULL) return NULL;
 	place(ptr, newSize);
+	printf("%lu: ptr %lu: ptr and word\n", ptr, ptr+WSIZE);
 	return (void *)(ptr + WSIZE);
 }
 
@@ -266,7 +268,7 @@ void printBlocks() {
 
 	while(pointer <= lastBlock) {
 		printf("%lu %i %i\n", (unsigned long) pointer, GET_SIZE(pointer), GET_ALLOC(pointer));
-		pointer = (void *) GET_NXT_PTR(pointer);
+		pointer = (void *) HDRP(NEXT_BLKP(pointer + WSIZE));
 		if(pointer == NULL) break;
 	}
 }
