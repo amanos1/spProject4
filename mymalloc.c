@@ -72,13 +72,45 @@ void myinit(int allocAlg) {
 	mode = allocAlg;
 }
 
+/***********************************************************************/
+/* THE FOLLOWING FUNCTION DETERMINES IF THE BLOCK IN QUESTION IS       */
+/* ELLIGIBLE TO REMAIN A DISTICT IDENTITY OR IF IT WILL BE ASSIMILATED */
+/* TO BE ONE OF US. IF IT CAN IT WILL BE MERGED WITH ITS NEIGHBOR,     */
+/* PREVIOUS AFTER OR BOTH                                              */
+/***********************************************************************/
+int assimilate(char *addr) {
+	void *prev_blk = HDRP(PREV_BLKP(addr + WSIZE));
+	void *nxt_blk =  HDRP(NEXT_BLKP(addr + WSIZE));
+	int unique = 1;
+
+	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk) {
+		PUT(prev_blk, PACK(GET_SIZE(prev_blk) + GET_SIZE(addr), 0));
+		PUT2(NXT_PTR(prev_blk), (unsigned long) nxt_blk);
+		addr = prev_blk;
+		if(lastBlock == addr) lastBlock = prev_blk;
+		unique = 0;
+	}
+
+	if(GET_NXT_PTR(addr) ==  (unsigned long) nxt_blk) {
+		PUT(addr, PACK(GET_SIZE(addr) + GET_SIZE(nxt_blk), 0));
+		PUT2(NXT_PTR(addr), (unsigned long) GET_NXT_PTR(nxt_blk));
+		if(lastBlock == nxt_blk) lastBlock = addr;
+		unique = 0;
+	}
+
+	return unique;
+}
+
+
 char *findFirst(size_t size) {
-	char *currPtr = heap;
-	while(currPtr != NULL && currPtr <= lastBlock) {
+	char *currPtr = GET_NXT_PTR(heap);
+	
+	while(currPtr != NULL && currPtr <= (char *) lastBlock) {
+
 		if(GET_SIZE(currPtr) >= size) {
 			return currPtr;
 		}
-		currPtr = (void *) GET_NXT_PTR(currPtr);
+		currPtr = (char *) GET_NXT_PTR(currPtr);
 	}
 	return NULL;
 }
@@ -136,20 +168,25 @@ char *realEstate(size_t size) {
 /************************************************/
 void place(void *ptr, size_t size) {
 	int diff = GET_SIZE(ptr) - size;
-	int *prev = (void *) GET_PRV_PTR(ptr);
-	int *next = (void *) GET_NXT_PTR(ptr);
+	void *prev = (void *) GET_PRV_PTR(ptr);
+	void *next = (void *) GET_NXT_PTR(ptr);
 	void *newBlock = ptr + size;
 
 	PUT(ptr, PACK(size, 1));
 	PUT(FTRP(ptr + WSIZE), PACK(size, 1));
 	if(diff == 0) {
-		if(prev != NULL) PUT(NXT_PTR(prev), (unsigned long) GET_NXT_PTR(ptr));
-		if(next != NULL) PUT(PRV_PTR(next), (unsigned long) GET_PRV_PTR(ptr));
+		//printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
+		if(prev != NULL) PUT2(NXT_PTR(prev), (unsigned long) GET_NXT_PTR(ptr));
+		if(next != NULL) PUT2(PRV_PTR(next), (unsigned long) GET_PRV_PTR(ptr));
 	} else {
 		PUT(newBlock, PACK(diff, 0));
 		PUT(FTRP(newBlock + WSIZE), PACK(diff, 0));
 		PUT2(NXT_PTR(newBlock), (unsigned long) GET_NXT_PTR(ptr));
 		PUT2(PRV_PTR(newBlock), (unsigned long) GET_PRV_PTR(ptr));
+		//printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
+		//printf("%lu %lu %lu\n\n", heap, lastBlock, NXT_PTR(GET_PRV_PTR(ptr)));
+		PUT2(NXT_PTR(GET_PRV_PTR(ptr)), newBlock);
+		assimilate(newBlock);
 	}
 
 	if(lastBlock <= ptr) {
@@ -170,39 +207,15 @@ void* mymalloc(size_t size) {
 
 	char *ptr;
 	if ((ptr = realEstate(newSize)) == NULL) return NULL;
+	//printf("%lu : %d\n", ptr, newSize);
 	place(ptr, newSize);
-	printf("%lu: ptr %lu: ptr and word\n", ptr, ptr+WSIZE);
+
+	//printf("%lu: ptr %lu: ptr and word\n", ptr, ptr+WSIZE);
+
 	return (void *)(ptr + WSIZE);
 }
 
-/***********************************************************************/
-/* THE FOLLOWING FUNCTION DETERMINES IF THE BLOCK IN QUESTION IS       */
-/* ELLIGIBLE TO REMAIN A DISTICT IDENTITY OR IF IT WILL BE ASSIMILATED */
-/* TO BE ONE OF US. IF IT CAN IT WILL BE MERGED WITH ITS NEIGHBOR,     */
-/* PREVIOUS AFTER OR BOTH                                              */
-/***********************************************************************/
-int assimilate(char *addr) {
-	void *prev_blk = HDRP(PREV_BLKP(addr + WSIZE));
-	void *nxt_blk =  HDRP(NEXT_BLKP(addr + WSIZE));
-	int unique = 1;
 
-	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk) {
-		PUT(prev_blk, PACK(GET_SIZE(prev_blk) + GET_SIZE(addr), 0));
-		PUT2(NXT_PTR(prev_blk), (unsigned long) nxt_blk);
-		addr = prev_blk;
-		if(lastBlock == addr) lastBlock = prev_blk;
-		unique = 0;
-	}
-
-	if(GET_NXT_PTR(addr) ==  (unsigned long) nxt_blk) {
-		PUT(addr, PACK(GET_SIZE(addr) + GET_SIZE(nxt_blk), 0));
-		PUT2(NXT_PTR(addr), (unsigned long) GET_NXT_PTR(nxt_blk));
-		if(lastBlock == nxt_blk) lastBlock = addr;
-		unique = 0;
-	}
-
-	return unique;
-}
 
 void myfree(void* ptr) {
 	if(ptr <= heap || ptr >= lastBlock) return;
@@ -245,7 +258,7 @@ void* myrealloc(void* ptr, size_t size) {
 	else
 		newSize = DSIZE * ((size + 3*DSIZE + (DSIZE-1)) / DSIZE);
 
-	char *nextBlock = NEXT_BLKP(HDRP(ptr));
+	char *nextBlock = HDRP(NEXT_BLKP(ptr));
 
 	if(GET_ALLOC(nextBlock) == 0 
 		&& newSize <= GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr))) {
@@ -254,7 +267,11 @@ void* myrealloc(void* ptr, size_t size) {
 	}
 
 	myfree(ptr);
-	return mymalloc(size);
+	//printf("%d\n", newSize);
+	char *ptr2 = realEstate(newSize);
+	if(ptr2 != NULL) place(ptr2, newSize);
+	
+	return (void *) (ptr + WSIZE);
 }
 
 void mycleanup() {
