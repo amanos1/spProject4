@@ -104,7 +104,8 @@ int assimilate(char *addr) {
 
 char *findFirst(size_t size) {
 	char *currPtr = GET_NXT_PTR(heap);
-	
+
+
 	while(currPtr != NULL && currPtr <= (char *) lastBlock) {
 
 		if(GET_SIZE(currPtr) >= size) {
@@ -209,6 +210,7 @@ void* mymalloc(size_t size) {
 	if ((ptr = realEstate(newSize)) == NULL) return NULL;
 	//printf("%lu : %d\n", ptr, newSize);
 	place(ptr, newSize);
+
 
 	//printf("%lu: ptr %lu: ptr and word\n", ptr, ptr+WSIZE);
 
