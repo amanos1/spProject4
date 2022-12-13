@@ -73,11 +73,11 @@ void myinit(int allocAlg) {
 
 char *findFirst(size_t size) {
 	char *currPtr = heap;
-	while(currPtr != NULL) {
+	while(currPtr != NULL && currPtr <= (char *) lastBlock) {
 		if(GET_SIZE(currPtr) >= size) {
 			return currPtr;
 		}
-		currPtr = (void *) GET_NXT_PTR(currPtr);
+		currPtr = (char *) GET_NXT_PTR(currPtr);
 	}
 	return NULL;
 }
@@ -135,20 +135,22 @@ char *realEstate(size_t size) {
 /************************************************/
 void place(void *ptr, size_t size) {
 	int diff = GET_SIZE(ptr) - size;
-	int *prev = (void *) GET_PRV_PTR(ptr);
-	int *next = (void *) GET_NXT_PTR(ptr);
+	void *prev = (void *) GET_PRV_PTR(ptr);
+	void *next = (void *) GET_NXT_PTR(ptr);
 	void *newBlock = ptr + size;
 
 	PUT(ptr, PACK(size, 1));
 	PUT(FTRP(ptr + WSIZE), PACK(size, 1));
 	if(diff == 0) {
-		if(prev != NULL) PUT(NXT_PTR(prev), (unsigned long) GET_NXT_PTR(ptr));
-		if(next != NULL) PUT(PRV_PTR(next), (unsigned long) GET_PRV_PTR(ptr));
+		printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
+		if(prev != NULL) PUT2(NXT_PTR(prev), (unsigned long) GET_NXT_PTR(ptr));
+		if(next != NULL) PUT2(PRV_PTR(next), (unsigned long) GET_PRV_PTR(ptr));
 	} else {
 		PUT(newBlock, PACK(diff, 0));
 		PUT(FTRP(newBlock + WSIZE), PACK(diff, 0));
 		PUT2(NXT_PTR(newBlock), (unsigned long) GET_NXT_PTR(ptr));
 		PUT2(PRV_PTR(newBlock), (unsigned long) GET_PRV_PTR(ptr));
+		PUT2(NXT_PTR(GET_PRV_PTR(ptr)), newBlock);
 	}
 
 	if(lastBlock <= ptr) {
@@ -170,6 +172,7 @@ void* mymalloc(size_t size) {
 	char *ptr;
 	if ((ptr = realEstate(newSize)) == NULL) return NULL;
 	place(ptr, newSize);
+	printf("%lu hhh\n", (unsigned long) ptr);
 	return (void *)(ptr + WSIZE);
 }
 
@@ -266,7 +269,7 @@ void printBlocks() {
 
 	while(pointer <= lastBlock) {
 		printf("%lu %i %i\n", (unsigned long) pointer, GET_SIZE(pointer), GET_ALLOC(pointer));
-		pointer = (void *) GET_NXT_PTR(pointer);
+		pointer = (void *) HDRP(NEXT_BLKP(pointer + WSIZE));
 		if(pointer == NULL) break;
 	}
 }
