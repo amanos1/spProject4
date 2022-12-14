@@ -185,9 +185,8 @@ void place(void *ptr, size_t size) {
 		if(next != NULL) PUT2(PRV_PTR(next), (unsigned long) GET_PRV_PTR(ptr));
 	} else {
 		PUT(newBlock, PACK(diff, 0));
-		printf("hmm what's our size? %d\n", diff);
-		printf("idkman %lu\n", (unsigned long) FTRP(newBlock + WSIZE));
 		PUT(FTRP(newBlock + WSIZE), PACK(diff, 0));
+		printf("this is next. %lu\n", GET_NXT_PTR(ptr));
 		PUT2(NXT_PTR(newBlock), (unsigned long) GET_NXT_PTR(ptr));
 		PUT2(PRV_PTR(newBlock), (unsigned long) GET_PRV_PTR(ptr));
 		//printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
@@ -202,7 +201,6 @@ void place(void *ptr, size_t size) {
 }
 
 void* mymalloc(size_t size) {
-	printf("bruh what's going on %ui\n", size);
 	if(size == 0) return NULL;
 
 	size_t newSize;
@@ -245,7 +243,7 @@ void myfree(void* ptr) {
 	PUT2(PRV_PTR(HDRP(ptr)), (unsigned long) p);
 	printf("this's next?!?! %lu %lu\n", (unsigned long) p, (unsigned long) GET_PRV_PTR(HDRP(ptr)));
 	PUT2(PRV_PTR(nextP), (unsigned long) HDRP(ptr));
-	PUT2(NXT_PTR(p),   (unsigned long) HDRP(ptr));
+	PUT2(NXT_PTR(p),     (unsigned long) HDRP(ptr));
 
 
 	assimilate(HDRP(ptr));
