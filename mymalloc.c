@@ -86,9 +86,10 @@ int assimilate(char *addr) {
 	void *nxt_blk =  HDRP(NEXT_BLKP(addr + WSIZE));
 	int unique = 1;
 	
-	//printf("%lu %lu %lu %lu\n", addr, GET_PRV_PTR(addr), GET_NXT_PTR(addr), lastBlock);
 	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk && GET_ALLOC(prev_blk) == 0) {
-		PUT(prev_blk, PACK(GET_SIZE(prev_blk) + GET_SIZE(addr), 0));
+		int newSize = GET_SIZE(prev_blk) + GET_SIZE(addr);
+		PUT(prev_blk, PACK(newSize, 0));
+		PUT(FTRP(prev_blk+WSIZE), PACK(newSize, 0));
 		PUT2(NXT_PTR(prev_blk), (unsigned long) nxt_blk);
 		addr = prev_blk;
 		if(lastBlock == addr) lastBlock = prev_blk;
@@ -96,8 +97,11 @@ int assimilate(char *addr) {
 	}
 
 	if(GET_NXT_PTR(addr) ==  (unsigned long) nxt_blk && GET_ALLOC(nxt_blk) == 0) {
-		PUT(addr, PACK(GET_SIZE(addr) + GET_SIZE(nxt_blk), 0));
+		int newSize = GET_SIZE(nxt_blk) + GET_SIZE(addr);
+		PUT(addr, PACK(newSize, 0));
+		PUT(FTRP(addr+WSIZE), PACK(newSize, 0));
 		PUT2(NXT_PTR(addr), (unsigned long) GET_NXT_PTR(nxt_blk));
+		if(GET_NXT_PTR(addr) != 0) PUT2(PRV_PTR(GET_NXT_PTR(addr)), (unsigned long) addr);
 		if(lastBlock == nxt_blk) lastBlock = addr;
 		unique = 0;
 	}
@@ -186,12 +190,12 @@ void place(void *ptr, size_t size) {
 	} else {
 		PUT(newBlock, PACK(diff, 0));
 		PUT(FTRP(newBlock + WSIZE), PACK(diff, 0));
-		printf("this is next. %lu\n", GET_NXT_PTR(ptr));
 		PUT2(NXT_PTR(newBlock), (unsigned long) GET_NXT_PTR(ptr));
 		PUT2(PRV_PTR(newBlock), (unsigned long) GET_PRV_PTR(ptr));
 		//printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
 		//printf("%lu %lu %lu\n\n", heap, lastBlock, NXT_PTR(GET_PRV_PTR(ptr)));
 		PUT2(NXT_PTR(GET_PRV_PTR(ptr)), (unsigned long) newBlock);
+		if(GET_NXT_PTR(ptr) != 0) PUT2(PRV_PTR(GET_NXT_PTR(ptr)), (unsigned long) newBlock);
 		assimilate(newBlock);
 	}
 
@@ -237,14 +241,12 @@ void myfree(void* ptr) {
 		p = (void *) GET_NXT_PTR(p);
 	}
 
-	char *nextP = GET_NXT_PTR(p);	
+	char *nextP = (char *) GET_NXT_PTR(p);	
 	//printf("was she right?? %lu\n", (unsigned long) GET_PRV_PTR(nextP));
-	PUT2(NXT_PTR(HDRP(ptr)), (unsigned long) nextP);
 	PUT2(PRV_PTR(HDRP(ptr)), (unsigned long) p);
-	printf("this's next?!?! %lu %lu\n", (unsigned long) p, (unsigned long) GET_PRV_PTR(HDRP(ptr)));
+	PUT2(NXT_PTR(HDRP(ptr)), (unsigned long) nextP);
 	PUT2(PRV_PTR(nextP), (unsigned long) HDRP(ptr));
 	PUT2(NXT_PTR(p),     (unsigned long) HDRP(ptr));
-
 
 	assimilate(HDRP(ptr));
 		/*
@@ -300,14 +302,15 @@ void* myrealloc(void* ptr, size_t size) {
 		newSize = DSIZE * ((size + 3*DSIZE + (DSIZE-1)) / DSIZE);
 
 	char *nextBlock = HDRP(NEXT_BLKP(ptr));
-	printf("we doin it right %lu\n", (unsigned long) nextBlock);
 
 	if(GET_ALLOC(nextBlock) == 0 
 		&& newSize <= GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr))) {
-		printf("bruh can I just go home? %lu\n", (unsigned long) NXT_PTR(GET_PRV_PTR(nextBlock)));
-		PUT2(NXT_PTR(GET_PRV_PTR(nextBlock)), GET_NXT_PTR(nextBlock));
-		if(GET_NXT_PTR(nextBlock) != NULL) PUT2(PRV_PTR(GET_NXT_PTR(nextBlock)), GET_PRV_PTR(nextBlock));
-		PUT(HDRP(ptr), PACK(GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr)), 1));
+		//printf("bruh can I just go home? %lu\n", (unsigned long) NXT_PTR(GET_PRV_PTR(nextBlock)));
+		PUT(HDRP(ptr), PACK(GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr)), 0));
+		PUT2(NXT_PTR(HDRP(ptr)), GET_NXT_PTR(nextBlock));
+		PUT2(PRV_PTR(HDRP(ptr)), GET_PRV_PTR(nextBlock));
+		PUT2(NXT_PTR(GET_PRV_PTR(nextBlock)), (unsigned long) HDRP(ptr));
+		if(GET_NXT_PTR(nextBlock) != 0) PUT2(PRV_PTR(GET_NXT_PTR(nextBlock)), (unsigned long) HDRP(ptr));
 		place(HDRP(ptr), newSize);
 		return ptr;
 	}
@@ -340,4 +343,6 @@ void printBlocks() {
 		pointer = (void *) HDRP(NEXT_BLKP(pointer + WSIZE));
 		if(pointer == NULL) break;
 	}
+
+	printf("\n");
 }
