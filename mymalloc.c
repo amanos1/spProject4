@@ -33,7 +33,7 @@
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 #define NXT_PTR(p) ((p) + WSIZE)
-#define PRV_PTR(p) ((p) + WSIZE + WSIZE)
+#define PRV_PTR(p) ((p) + WSIZE + DSIZE)
 
 #define GET_NXT_PTR(p) (*(unsigned long *)(NXT_PTR(p)))
 #define GET_PRV_PTR(p) (*(unsigned long *)(PRV_PTR(p)))
@@ -240,21 +240,45 @@ void myfree(void* ptr) {
 	}
 
 	char *nextP = GET_NXT_PTR(p);	
+	//printf("was she right?? %lu\n", (unsigned long) GET_PRV_PTR(nextP));
+	PUT2(NXT_PTR(HDRP(ptr)), (unsigned long) nextP);
 	PUT2(PRV_PTR(HDRP(ptr)), (unsigned long) p);
-	PUT2(NXT_PTR(HDRP(ptr)), (unsigned long) GET_NXT_PTR(p));
+	printf("this's next?!?! %lu %lu\n", (unsigned long) p, (unsigned long) GET_PRV_PTR(HDRP(ptr)));
 	PUT2(PRV_PTR(nextP), (unsigned long) HDRP(ptr));
 	PUT2(NXT_PTR(p),   (unsigned long) HDRP(ptr));
 
-	printf("this's next?!?! %lu\n", (unsigned long) GET_PRV_PTR(HDRP(ptr)));
-	assimilate(HDRP(ptr));
 
+	assimilate(HDRP(ptr));
 		/*
 	if(assimilate(HDRP(ptr)) == 1) {
 		printf("this is running, isnt it?\n");
-	} */
-}
+	}
+	*/
+} 
 
+/*
+void myfree(void* ptr) {
+	if(ptr <= heap || ptr >= lastBlock) return;
 
+	size_t size = GET_SIZE(HDRP(ptr));
+
+	PUT(HDRP(ptr), PACK(size, 0));
+	PUT(FTRP(ptr), PACK(size, 0));
+	
+
+	if(assimilate(HDRP(ptr)) == 1) {
+		void *p = heap;
+		while(p < ptr) {
+			if(GET_NXT_PTR(p) > (unsigned long) ptr) {
+				PUT2(NXT_PTR(ptr), (unsigned long) GET_NXT_PTR(p));
+				PUT2(PRV_PTR(ptr), (unsigned long) p);
+				PUT2(NXT_PTR(p),   (unsigned long) ptr);
+				break;
+			}
+			p = (void *) GET_NXT_PTR(p);
+		}
+	}
+}*/
 
 void* myrealloc(void* ptr, size_t size) {
 	if(ptr == NULL && size <= 0) return NULL;
