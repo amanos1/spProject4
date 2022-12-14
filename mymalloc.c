@@ -38,6 +38,9 @@
 #define GET_NXT_PTR(p) (*(unsigned long *)(NXT_PTR(p)))
 #define GET_PRV_PTR(p) (*(unsigned long *)(PRV_PTR(p)))
 
+#define SET_NXT_PTR(bp, qp) (GET_NXT_PTR(bp) = qp)
+#define SET_PRV_PTR(bp, qp) (GET_PRV_PTR(bp) = qp)
+
 #define FIRST 0
 #define  NEXT 1
 #define  BEST 2
@@ -48,13 +51,7 @@ static void *heapTruStart; //so that we can free it
 static void *heap; //Points to the first byte of heap
 static void *lastBlock; //Points to last byte of heap plus 1
 
-struct free_list_blocks{
-	void *address;
-	size_t size;
-	struct free_list_blocks *next;
-};
-
-typedef struct free_list_blocks free_list;
+char *freeListHead = 0;
 
 /***********************************************************************/
 /*  */
@@ -76,14 +73,60 @@ void myinit(int allocAlg) {
 	PUT2(PRV_PTR(bigFreeBlk), (unsigned long) heap);
 	PUT2(NXT_PTR(heap), (unsigned long) bigFreeBlk);
 	
-	free_list *block;
 
 	lastBlock = bigFreeBlk;
 	mode = allocAlg;
 }
 
+void insert_in_free(void *ptr){
+	SET_NXT_PTR(ptr, freeListHead);
+	SET_PRV_PTR(freeListHead, ptr);
+	SET_PRV_PTR(ptr, NULL);
+	freeListHead = ptr;
+}
 	
+void remove_from_free(void *ptr){
+	if (GET_PRV_PTR(ptr)){
+		SET_NXT_PTR(GET_PRV_PTR(ptr), GET_NXT_PTR(ptr));
+	}
+	else{
+		freeListHead = GET_NXT_PTR(ptr);
+	}
+	SET_PRV_PTR(GET_NXT_PTR(ptr), GET_PRV_PTR(ptr));
+}
 
+void *coalescer(void *ptr){
+	
+	size_t nextAlloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr + WSIZE)));
+	size_t prevAlloc = GET_ALLOC(FTRP(PREV_BLKP(ptr + WSIZE))) || PREV_BLKP(ptr + WSIZE) == ptr;
+	size_t size = GET_SIZE(HDRP(ptr)); 
+	
+	if (prevAlloc == 1 && nextAlloc == 0){
+		size += GET_SIZE(HDRP(NEXT_BLKP(ptr)));
+		remove_from_free(NEXT_BLKP(ptr));
+		PUT(HDRP(ptr), PACK(size, 0));
+		PUT(FTRP(ptr), PACK(size, 0));
+	}
+	
+	else if(prevAlloc == 0 && nextAlloc == 1){
+		size += GET_SIZE(HDRP(PREV_BLKP(ptr)));
+		ptr = PREV_BLKP(ptr);
+		remove_from_free(ptr);
+		PUT(HDRP(ptr), PACK(size, 0));
+		PUT(FTRP(ptr), PACK(size, 0));
+	}
+	
+	else if(prevAlloc == 0 && nextAlloc == 0){
+		size += GET_SIZE(HDRP(PREV_BLKP(ptr))) + GET_SIZE(HDRP(NEXT_BLKP(ptr)));
+		remove_from_free(PREV_BLKP(ptr));
+		remove_from_free(NEXT_BLKP(ptr));
+		ptr = PREV_BLKP(ptr);
+		PUT(HDRP(ptr), PACK(size, 0));
+		PUT(FTRP(ptr), PACK(size, 0));
+	}
+	insert_in_free(ptr);
+	return ptr;
+}
 
 /***********************************************************************/
 /* THE FOLLOWING FUNCTION DETERMINES IF THE BLOCK IN QUESTION IS       */
@@ -96,7 +139,7 @@ int assimilate(char *addr) {
 	void *nxt_blk =  HDRP(NEXT_BLKP(addr + WSIZE));
 	int unique = 1;
 	
-	printf("%lu %lu %lu\n", GET_PRV_PTR(addr), GET_NXT_PTR(addr), lastBlock);
+	//printf("%lu %lu %lu\n", GET_PRV_PTR(addr), GET_NXT_PTR(addr), lastBlock);
 	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk && GET_ALLOC(prev_blk) == 0) {
 		printf("hello");
 		PUT(prev_blk, PACK(GET_SIZE(prev_blk) + GET_SIZE(addr), 0));
@@ -203,7 +246,7 @@ void place(void *ptr, size_t size) {
 		//printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
 		//printf("%lu %lu %lu\n\n", heap, lastBlock, NXT_PTR(GET_PRV_PTR(ptr)));
 		PUT2(NXT_PTR(GET_PRV_PTR(ptr)), newBlock);
-		assimilate(newBlock);
+		coalescer(newBlock);
 	}
 
 	if(lastBlock <= ptr) {
@@ -244,18 +287,7 @@ void myfree(void* ptr) {
 	PUT(FTRP(ptr), PACK(size, 0));
 	
 
-	if(assimilate(HDRP(ptr)) == 1) {
-		void *p = heap;
-		while(p < ptr) {
-			if(GET_NXT_PTR(p) > (unsigned long) ptr) {
-				PUT2(NXT_PTR(ptr), (unsigned long) GET_NXT_PTR(p));
-				PUT2(PRV_PTR(ptr), (unsigned long) p);
-				PUT2(NXT_PTR(p),   (unsigned long) ptr);
-				break;
-			}
-			p = (void *) GET_NXT_PTR(p);
-		}
-	}
+	coalescer(ptr);
 }
 
 
