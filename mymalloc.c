@@ -48,14 +48,6 @@ static void *heapTruStart; //so that we can free it
 static void *heap; //Points to the first byte of heap
 static void *lastBlock; //Points to last byte of heap plus 1
 
-struct free_list_blocks{
-	void *address;
-	size_t size;
-	struct free_list_blocks *next;
-};
-
-typedef struct free_list_blocks free_list;
-
 /***********************************************************************/
 /*  */
 /***********************************************************************/
@@ -76,8 +68,6 @@ void myinit(int allocAlg) {
 	PUT2(PRV_PTR(bigFreeBlk), (unsigned long) heap);
 	PUT2(NXT_PTR(heap), (unsigned long) bigFreeBlk);
 	
-	free_list *block;
-
 	lastBlock = bigFreeBlk;
 	mode = allocAlg;
 }
@@ -96,9 +86,8 @@ int assimilate(char *addr) {
 	void *nxt_blk =  HDRP(NEXT_BLKP(addr + WSIZE));
 	int unique = 1;
 	
-	printf("%lu %lu %lu\n", GET_PRV_PTR(addr), GET_NXT_PTR(addr), lastBlock);
+	//printf("%lu %lu %lu %lu\n", addr, GET_PRV_PTR(addr), GET_NXT_PTR(addr), lastBlock);
 	if(GET_PRV_PTR(addr) == (unsigned long) prev_blk && GET_ALLOC(prev_blk) == 0) {
-		printf("hello");
 		PUT(prev_blk, PACK(GET_SIZE(prev_blk) + GET_SIZE(addr), 0));
 		PUT2(NXT_PTR(prev_blk), (unsigned long) nxt_blk);
 		addr = prev_blk;
@@ -107,7 +96,6 @@ int assimilate(char *addr) {
 	}
 
 	if(GET_NXT_PTR(addr) ==  (unsigned long) nxt_blk && GET_ALLOC(nxt_blk) == 0) {
-		printf("hello2");		
 		PUT(addr, PACK(GET_SIZE(addr) + GET_SIZE(nxt_blk), 0));
 		PUT2(NXT_PTR(addr), (unsigned long) GET_NXT_PTR(nxt_blk));
 		if(lastBlock == nxt_blk) lastBlock = addr;
@@ -119,7 +107,7 @@ int assimilate(char *addr) {
 
 
 char *findFirst(size_t size) {
-	char *currPtr = GET_NXT_PTR(heap);
+	char *currPtr = (char *) GET_NXT_PTR(heap);
 
 
 	while(currPtr != NULL && currPtr <= (char *) lastBlock) {
@@ -153,7 +141,7 @@ char *findNext(size_t size) {
 }
 
 char *findBest(size_t size) {
-	char *currPtr = heap;
+	char *currPtr = (char *) GET_NXT_PTR(heap);
 	char *bestPtr = NULL;
 	size_t lowest = HEAP_SIZE;
 	while(currPtr != NULL) {
@@ -197,12 +185,14 @@ void place(void *ptr, size_t size) {
 		if(next != NULL) PUT2(PRV_PTR(next), (unsigned long) GET_PRV_PTR(ptr));
 	} else {
 		PUT(newBlock, PACK(diff, 0));
+		printf("hmm what's our size? %d\n", diff);
+		printf("idkman %lu\n", (unsigned long) FTRP(newBlock + WSIZE));
 		PUT(FTRP(newBlock + WSIZE), PACK(diff, 0));
 		PUT2(NXT_PTR(newBlock), (unsigned long) GET_NXT_PTR(ptr));
 		PUT2(PRV_PTR(newBlock), (unsigned long) GET_PRV_PTR(ptr));
 		//printf("%lu %lu %lu\n\n", heap, lastBlock, ptr);
 		//printf("%lu %lu %lu\n\n", heap, lastBlock, NXT_PTR(GET_PRV_PTR(ptr)));
-		PUT2(NXT_PTR(GET_PRV_PTR(ptr)), newBlock);
+		PUT2(NXT_PTR(GET_PRV_PTR(ptr)), (unsigned long) newBlock);
 		assimilate(newBlock);
 	}
 
@@ -212,6 +202,7 @@ void place(void *ptr, size_t size) {
 }
 
 void* mymalloc(size_t size) {
+	printf("bruh what's going on %ui\n", size);
 	if(size == 0) return NULL;
 
 	size_t newSize;
@@ -242,27 +233,30 @@ void myfree(void* ptr) {
 
 	PUT(HDRP(ptr), PACK(size, 0));
 	PUT(FTRP(ptr), PACK(size, 0));
-	
 
-	if(assimilate(HDRP(ptr)) == 1) {
-		void *p = heap;
-		while(p < ptr) {
-			if(GET_NXT_PTR(p) > (unsigned long) ptr) {
-				PUT2(NXT_PTR(ptr), (unsigned long) GET_NXT_PTR(p));
-				PUT2(PRV_PTR(ptr), (unsigned long) p);
-				PUT2(NXT_PTR(p),   (unsigned long) ptr);
-				break;
-			}
-			p = (void *) GET_NXT_PTR(p);
-		}
+	void *p = heap;
+	while(GET_NXT_PTR(p) < (unsigned long) ptr) {
+		p = (void *) GET_NXT_PTR(p);
 	}
+
+	char *nextP = GET_NXT_PTR(p);	
+	PUT2(PRV_PTR(HDRP(ptr)), (unsigned long) p);
+	PUT2(NXT_PTR(HDRP(ptr)), (unsigned long) GET_NXT_PTR(p));
+	PUT2(PRV_PTR(nextP), (unsigned long) HDRP(ptr));
+	PUT2(NXT_PTR(p),   (unsigned long) HDRP(ptr));
+
+	printf("this's next?!?! %lu\n", (unsigned long) GET_PRV_PTR(HDRP(ptr)));
+	assimilate(HDRP(ptr));
+
+		/*
+	if(assimilate(HDRP(ptr)) == 1) {
+		printf("this is running, isnt it?\n");
+	} */
 }
 
 
 
 void* myrealloc(void* ptr, size_t size) {
-	if(ptr <= heap || ptr >= lastBlock) return NULL;
-
 	if(ptr == NULL && size <= 0) return NULL;
 	if(ptr == NULL) return mymalloc(size);
 	if(size <= 0) {
@@ -270,7 +264,10 @@ void* myrealloc(void* ptr, size_t size) {
 		return NULL;
 	}
 
+	if(ptr <= heap || ptr >= lastBlock) return NULL;
+
 	if(GET_ALLOC(HDRP(ptr)) != 1) return NULL;
+
 
 	size_t newSize;
 	int minSize = 3 * DSIZE;
@@ -281,19 +278,27 @@ void* myrealloc(void* ptr, size_t size) {
 		newSize = DSIZE * ((size + 3*DSIZE + (DSIZE-1)) / DSIZE);
 
 	char *nextBlock = HDRP(NEXT_BLKP(ptr));
+	printf("we doin it right %lu\n", (unsigned long) nextBlock);
 
 	if(GET_ALLOC(nextBlock) == 0 
 		&& newSize <= GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr))) {
+		printf("bruh can I just go home? %lu\n", (unsigned long) NXT_PTR(GET_PRV_PTR(nextBlock)));
+		PUT2(NXT_PTR(GET_PRV_PTR(nextBlock)), GET_NXT_PTR(nextBlock));
+		if(GET_NXT_PTR(nextBlock) != NULL) PUT2(PRV_PTR(GET_NXT_PTR(nextBlock)), GET_PRV_PTR(nextBlock));
+		PUT(HDRP(ptr), PACK(GET_SIZE(nextBlock) + GET_SIZE(HDRP(ptr)), 1));
 		place(HDRP(ptr), newSize);
 		return ptr;
 	}
+	printf("I'm reallocing! %lu\n", (unsigned long) ptr);
 
 	myfree(ptr);
+	return mymalloc(size); /*
 	//printf("%d\n", newSize);
 	char *ptr2 = realEstate(newSize);
+	printf("where we at? %d\n", newSize);
 	if(ptr2 != NULL) place(ptr2, newSize);
 	
-	return (void *) (ptr + WSIZE);
+	return (void *) (ptr + WsIZE);*/
 }
 
 void mycleanup() {
@@ -306,7 +311,10 @@ void printBlocks() {
 	void *pointer = heap;
 
 	while(pointer <= lastBlock) {
-		printf("%lu %i %i\n", (unsigned long) pointer, GET_SIZE(pointer), GET_ALLOC(pointer));
+		if(pointer != heap && GET_ALLOC(pointer) == 1)
+			printf("%lu %i %i\n", (unsigned long) pointer, GET_SIZE(pointer), GET_ALLOC(pointer));
+		else
+			printf("%lu %i %i %lu %lu\n", (unsigned long) pointer, GET_SIZE(pointer), GET_ALLOC(pointer), GET_PRV_PTR(pointer), GET_NXT_PTR(pointer));
 		pointer = (void *) HDRP(NEXT_BLKP(pointer + WSIZE));
 		if(pointer == NULL) break;
 	}
